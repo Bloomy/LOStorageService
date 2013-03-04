@@ -1,0 +1,217 @@
+//
+//  LOStorageService.m
+//  Temporary CoreData
+//
+
+#import "LOStorageService.h"
+
+
+static const NSString *kIdentifier = @"CoreData";
+
+
+@interface LOStorageService () {}
+
+@property (strong, nonatomic) NSManagedObjectModel *managedObjectModel;
+@property (strong, nonatomic) NSPersistentStoreCoordinator *persistentStoreCoordinator;
+@property (strong, nonatomic) NSString *identifier;
+@end
+
+
+
+@implementation LOStorageService
+
+@synthesize managedObjectContext = _managedObjectContext;
+@synthesize managedObjectModel = _managedObjectModel;
+@synthesize persistentStoreCoordinator = _persistentStoreCoordinator;
+
+
+static LOStorageService *_sharedInstance = nil;
+
+
++ (void)initialize
+{
+    /*
+     PATRÓN SINGLETON:
+     http://stackoverflow.com/questions/145154/what-does-your-objective-c-singleton-look-like
+     *** el método initialize se llama sólo cuando se invoca por primera vez la clase y es síncrono
+    */
+    
+    static BOOL initialized = NO;
+    if (!initialized) {
+        initialized = YES;
+        _sharedInstance = [[LOStorageService alloc] initWithIdentifier:kIdentifier];
+    }
+}
+
+
++ (LOStorageService *)sharedInstance
+{
+    return _sharedInstance;
+}
+
+
+- (id)init
+{
+    if (_sharedInstance) {
+        [NSException raise:NSInternalInconsistencyException format:@"[%@ %@] cannot be called; use +[%@ %@] instead",  NSStringFromClass([self class]), NSStringFromSelector( @selector(init) ), NSStringFromClass([self class]), NSStringFromSelector( @selector(sharedInstance) )];
+    }
+    self = [self initWithIdentifier:kIdentifier];
+    return self;
+}
+
+
+- (id)initWithIdentifier:(NSString *)anIdentifier
+{
+	self = [super init];
+
+	if (self) {
+		_identifier = anIdentifier;
+	}
+	return self;
+}
+
+
+
+#pragma mark - CoreData stack
+
+- (NSManagedObjectContext *)managedObjectContext
+{
+    if (_managedObjectContext != nil) {
+        return _managedObjectContext;
+    }
+
+    if (self.persistentStoreCoordinator != nil) {
+        _managedObjectContext = [[NSManagedObjectContext alloc] init];
+        [_managedObjectContext setPersistentStoreCoordinator:_persistentStoreCoordinator];
+    }
+    return _managedObjectContext;
+}
+
+- (NSManagedObjectModel *)managedObjectModel
+{
+    if (_managedObjectModel != nil) {
+        return _managedObjectModel;
+    }
+
+    NSURL *modelURL = [[NSBundle mainBundle] URLForResource:kIdentifier withExtension:@"momd"];
+    _managedObjectModel = [[NSManagedObjectModel alloc] initWithContentsOfURL:modelURL];
+
+    return _managedObjectModel;
+}
+
+- (NSPersistentStoreCoordinator *)persistentStoreCoordinator
+{
+    if (_persistentStoreCoordinator != nil) {
+        return _persistentStoreCoordinator;
+    }
+
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+
+    NSURL *storeURL = [[self applicationDocumentsDirectory] URLByAppendingPathComponent:[kIdentifier stringByAppendingPathExtension:@"sqlite"]];
+
+    if (![fileManager fileExistsAtPath:[storeURL path]]) {
+        NSString *defaultStorePath = [[NSBundle mainBundle] pathForResource:kIdentifier ofType:@"sqlite"];
+        if (defaultStorePath) {
+            [fileManager copyItemAtPath:defaultStorePath toPath:[storeURL path] error:NULL];
+        }
+    }
+
+    _persistentStoreCoordinator = [[NSPersistentStoreCoordinator alloc] initWithManagedObjectModel:self.managedObjectModel];
+
+    NSDictionary *options = @{
+        NSMigratePersistentStoresAutomaticallyOption: @YES,
+        NSInferMappingModelAutomaticallyOption: @YES };
+
+    NSError *error = nil;
+
+    if (![_persistentStoreCoordinator addPersistentStoreWithType:NSSQLiteStoreType configuration:nil URL:storeURL options:options error:&error]) {
+        NSLog(@"Unresolved error %@, %@", error, [error userInfo]);
+        abort();
+    }
+
+    return _persistentStoreCoordinator;
+}
+
+
+
+#pragma mark - Data Methods
+
+- (void)deleteObject:(LODomainObject *)object
+{
+    if(_managedObjectContext) [_managedObjectContext deleteObject:object];
+}
+
+
+- (void)deleteAllObjectsOfType:(Class)class
+{
+    NSString *entityDescription = NSStringFromClass(class);
+
+	NSManagedObjectContext *context = [self managedObjectContext];
+    NSFetchRequest *fetchRequest = [[NSFetchRequest alloc] init];
+    NSEntityDescription *entity = [NSEntityDescription entityForName:entityDescription inManagedObjectContext:context];
+    [fetchRequest setEntity:entity];
+
+    NSError *error;
+    NSArray *items = [context executeFetchRequest:fetchRequest error:&error];
+
+    for (NSManagedObject *managedObject in items) {
+        [context deleteObject:managedObject];
+        NSLog(@"%@ object deleted", entityDescription);
+    }
+}
+
+
+#pragma mark - CoreData stack
+
+- (BOOL)save
+{    
+	NSError *error = nil;
+    if (![_managedObjectContext save:&error]) {
+        [self logNSError:error];
+		return FALSE;
+    }	
+	return TRUE;
+}
+
+- (NSArray *)allObjectsOfType:(Class)class
+{
+	NSManagedObjectContext *context = [self managedObjectContext];
+	
+	NSFetchRequest *request = [[NSFetchRequest alloc] init];
+	NSEntityDescription *entity = [NSEntityDescription entityForName:NSStringFromClass(class) inManagedObjectContext:context];
+	[request setEntity:entity];
+	
+	NSError *error = nil;
+	NSArray *fetchResults = [context executeFetchRequest:request error:&error];
+	
+	if (error != nil) {
+		NSLog(@"There was an error retrieving all objects of type: %@, %@", NSStringFromClass(class), [error localizedDescription]);
+		[self logNSError:error];
+		return nil;
+	}
+	
+	return fetchResults;	
+}
+
+
+#pragma mark - Helper Methods
+
+- (NSURL *)applicationDocumentsDirectory
+{
+    return [[[NSFileManager defaultManager] URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask] lastObject];
+}
+
+- (void)logNSError:(NSError *)error
+{
+	NSLog(@"%@", [error userInfo]); 
+	
+	if([error userInfo][@"NSDetailedErrors"]) {
+		for(NSError *errorItem in [error userInfo][@"NSDetailedErrors"]) {
+			for(NSString *key in [errorItem userInfo]) {
+				NSLog(@"%@ - %@", key, [errorItem userInfo][key]);
+			}				
+		}
+	}
+}
+
+@end
