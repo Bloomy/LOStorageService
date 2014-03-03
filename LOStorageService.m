@@ -6,8 +6,12 @@
 #import "LOStorageService.h"
 
 
-static const NSString *kIdentifier = @"CoreData";
+#pragma mark - Constant Definitions
 
+#define kIdentifier @"CoreData"
+
+
+#pragma mark - Interfaces
 
 @interface LOStorageService () {}
 
@@ -31,12 +35,13 @@ static LOStorageService *_sharedInstance = nil;
 + (void)initialize
 {
     /*
-     PATRÓN SINGLETON:
-     http://stackoverflow.com/questions/145154/what-does-your-objective-c-singleton-look-like
+       PATRÓN SINGLETON:
+       http://stackoverflow.com/questions/145154/what-does-your-objective-c-singleton-look-like
      *** el método initialize se llama sólo cuando se invoca por primera vez la clase y es síncrono
-    */
-    
+     */
+
     static BOOL initialized = NO;
+
     if (!initialized) {
         initialized = YES;
         _sharedInstance = [[LOStorageService alloc] initWithIdentifier:kIdentifier];
@@ -52,24 +57,21 @@ static LOStorageService *_sharedInstance = nil;
 
 - (id)init
 {
-    if (_sharedInstance) {
-        [NSException raise:NSInternalInconsistencyException format:@"[%@ %@] cannot be called; use +[%@ %@] instead",  NSStringFromClass([self class]), NSStringFromSelector( @selector(init) ), NSStringFromClass([self class]), NSStringFromSelector( @selector(sharedInstance) )];
-    }
-    self = [self initWithIdentifier:kIdentifier];
+    [NSException raise:NSInternalInconsistencyException format:@"[%@ %@] cannot be called; use +[%@ %@] instead",  NSStringFromClass([self class]), NSStringFromSelector(@selector(init) ), NSStringFromClass([self class]), NSStringFromSelector(@selector(sharedInstance) )];
     return self;
 }
 
 
 - (id)initWithIdentifier:(NSString *)anIdentifier
 {
-	self = [super init];
+    self = [super init];
 
-	if (self) {
-		_identifier = anIdentifier;
-	}
-	return self;
+    if (self) {
+        _identifier = anIdentifier;
+    }
+
+    return self;
 }
-
 
 
 #pragma mark - CoreData stack
@@ -84,8 +86,10 @@ static LOStorageService *_sharedInstance = nil;
         _managedObjectContext = [[NSManagedObjectContext alloc] init];
         [_managedObjectContext setPersistentStoreCoordinator:_persistentStoreCoordinator];
     }
+
     return _managedObjectContext;
 }
+
 
 - (NSManagedObjectModel *)managedObjectModel
 {
@@ -99,6 +103,7 @@ static LOStorageService *_sharedInstance = nil;
     return _managedObjectModel;
 }
 
+
 - (NSPersistentStoreCoordinator *)persistentStoreCoordinator
 {
     if (_persistentStoreCoordinator != nil) {
@@ -111,6 +116,7 @@ static LOStorageService *_sharedInstance = nil;
 
     if (![fileManager fileExistsAtPath:[storeURL path]]) {
         NSString *defaultStorePath = [[NSBundle mainBundle] pathForResource:kIdentifier ofType:@"sqlite"];
+
         if (defaultStorePath) {
             [fileManager copyItemAtPath:defaultStorePath toPath:[storeURL path] error:NULL];
         }
@@ -120,7 +126,8 @@ static LOStorageService *_sharedInstance = nil;
 
     NSDictionary *options = @{
         NSMigratePersistentStoresAutomaticallyOption: @YES,
-        NSInferMappingModelAutomaticallyOption: @YES };
+        NSInferMappingModelAutomaticallyOption: @YES
+    };
 
     NSError *error = nil;
 
@@ -133,12 +140,11 @@ static LOStorageService *_sharedInstance = nil;
 }
 
 
-
 #pragma mark - Data Methods
 
 - (void)deleteObject:(LODomainObject *)object
 {
-    if(_managedObjectContext) [_managedObjectContext deleteObject:object];
+    if (self.managedObjectContext) [_managedObjectContext deleteObject:object];
 }
 
 
@@ -146,16 +152,16 @@ static LOStorageService *_sharedInstance = nil;
 {
     NSString *entityDescription = NSStringFromClass(class);
 
-	NSManagedObjectContext *context = [self managedObjectContext];
     NSFetchRequest *fetchRequest = [[NSFetchRequest alloc] init];
-    NSEntityDescription *entity = [NSEntityDescription entityForName:entityDescription inManagedObjectContext:context];
+    NSEntityDescription *entity = [NSEntityDescription entityForName:entityDescription inManagedObjectContext:self.managedObjectContext];
+
     [fetchRequest setEntity:entity];
 
     NSError *error;
-    NSArray *items = [context executeFetchRequest:fetchRequest error:&error];
+    NSArray *items = [self.managedObjectContext executeFetchRequest:fetchRequest error:&error];
 
     for (NSManagedObject *managedObject in items) {
-        [context deleteObject:managedObject];
+        [self.managedObjectContext deleteObject:managedObject];
         NSLog(@"%@ object deleted", entityDescription);
     }
 }
@@ -164,33 +170,35 @@ static LOStorageService *_sharedInstance = nil;
 #pragma mark - CoreData stack
 
 - (BOOL)save
-{    
-	NSError *error = nil;
-    if (![_managedObjectContext save:&error]) {
+{
+    NSError *error = nil;
+
+    if (![self.managedObjectContext save:&error]) {
         [self logNSError:error];
-		return FALSE;
-    }	
-	return TRUE;
+        return FALSE;
+    }
+
+    return TRUE;
 }
+
 
 - (NSArray *)allObjectsOfType:(Class)class
 {
-	NSManagedObjectContext *context = [self managedObjectContext];
-	
-	NSFetchRequest *request = [[NSFetchRequest alloc] init];
-	NSEntityDescription *entity = [NSEntityDescription entityForName:NSStringFromClass(class) inManagedObjectContext:context];
-	[request setEntity:entity];
-	
-	NSError *error = nil;
-	NSArray *fetchResults = [context executeFetchRequest:request error:&error];
-	
-	if (error != nil) {
-		NSLog(@"There was an error retrieving all objects of type: %@, %@", NSStringFromClass(class), [error localizedDescription]);
-		[self logNSError:error];
-		return nil;
-	}
-	
-	return fetchResults;	
+    NSFetchRequest *request = [[NSFetchRequest alloc] init];
+    NSEntityDescription *entity = [NSEntityDescription entityForName:NSStringFromClass(class) inManagedObjectContext:self.managedObjectContext];
+
+    [request setEntity:entity];
+
+    NSError *error = nil;
+    NSArray *fetchResults = [self.managedObjectContext executeFetchRequest:request error:&error];
+
+    if (error != nil) {
+        NSLog(@"There was an error retrieving all objects of type: %@, %@", NSStringFromClass(class), [error localizedDescription]);
+        [self logNSError:error];
+        return nil;
+    }
+
+    return fetchResults;
 }
 
 
@@ -201,17 +209,19 @@ static LOStorageService *_sharedInstance = nil;
     return [[[NSFileManager defaultManager] URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask] lastObject];
 }
 
+
 - (void)logNSError:(NSError *)error
 {
-	NSLog(@"%@", [error userInfo]); 
-	
-	if([error userInfo][@"NSDetailedErrors"]) {
-		for(NSError *errorItem in [error userInfo][@"NSDetailedErrors"]) {
-			for(NSString *key in [errorItem userInfo]) {
-				NSLog(@"%@ - %@", key, [errorItem userInfo][key]);
-			}				
-		}
-	}
+    NSLog(@"%@", [error userInfo]);
+
+    if ([error userInfo][@"NSDetailedErrors"]) {
+        for (NSError *errorItem in [error userInfo][@"NSDetailedErrors"]) {
+            for (NSString *key in [errorItem userInfo]) {
+                NSLog(@"%@ - %@", key, [errorItem userInfo][key]);
+            }
+        }
+    }
 }
+
 
 @end

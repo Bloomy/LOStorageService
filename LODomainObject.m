@@ -8,19 +8,25 @@
 
 @implementation LODomainObject
 
-+ (NSString *)entityName {
-	[self doesNotRecognizeSelector:_cmd];
-	return nil;
++ (NSString *)entityName
+{
+    return CLASS_STRING(self);
 }
 
-+ (id)temporaryEntity {
-	NSManagedObjectContext *context = [[LOStorageService sharedInstance] managedObjectContext];
-	NSEntityDescription *entityDescription = [NSEntityDescription entityForName:[self entityName] inManagedObjectContext:context];
-	return [[self alloc] initWithEntity:entityDescription insertIntoManagedObjectContext:nil];	
+
++ (id)temporaryEntity
+{
+    NSManagedObjectContext *context = [[LOStorageService sharedInstance] managedObjectContext];
+    NSEntityDescription *entityDescription = [NSEntityDescription entityForName:[self entityName] inManagedObjectContext:context];
+
+    return [[self alloc] initWithEntity:entityDescription insertIntoManagedObjectContext:nil];
 }
 
-- (void)addToContext:(NSManagedObjectContext *)context {
-	[context insertObject:self];
+
+- (void)addToContext:(NSManagedObjectContext *)context
+{
+    [context insertObject:self];
 }
+
 
 @end
