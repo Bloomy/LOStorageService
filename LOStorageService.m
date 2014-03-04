@@ -6,11 +6,6 @@
 #import "LOStorageService.h"
 
 
-#pragma mark - Constant Definitions
-
-#define kIdentifier @"CoreData"
-
-
 #pragma mark - Interfaces
 
 @interface LOStorageService () {}
@@ -44,7 +39,7 @@ static LOStorageService *_sharedInstance = nil;
 
     if (!initialized) {
         initialized = YES;
-        _sharedInstance = [[LOStorageService alloc] initWithIdentifier:kIdentifier];
+        _sharedInstance = [[LOStorageService alloc] initWithIdentifier:kCoreDataIdentifier];
     }
 }
 
@@ -97,7 +92,7 @@ static LOStorageService *_sharedInstance = nil;
         return _managedObjectModel;
     }
 
-    NSURL *modelURL = [[NSBundle mainBundle] URLForResource:kIdentifier withExtension:@"momd"];
+    NSURL *modelURL = [[NSBundle mainBundle] URLForResource:kCoreDataIdentifier withExtension:@"momd"];
     _managedObjectModel = [[NSManagedObjectModel alloc] initWithContentsOfURL:modelURL];
 
     return _managedObjectModel;
@@ -110,26 +105,33 @@ static LOStorageService *_sharedInstance = nil;
         return _persistentStoreCoordinator;
     }
 
-    NSFileManager *fileManager = [NSFileManager defaultManager];
+    NSError *error = nil;
 
-    NSURL *storeURL = [[self applicationDocumentsDirectory] URLByAppendingPathComponent:[kIdentifier stringByAppendingPathExtension:@"sqlite"]];
-
-    if (![fileManager fileExistsAtPath:[storeURL path]]) {
-        NSString *defaultStorePath = [[NSBundle mainBundle] pathForResource:kIdentifier ofType:@"sqlite"];
-
-        if (defaultStorePath) {
-            [fileManager copyItemAtPath:defaultStorePath toPath:[storeURL path] error:NULL];
+    NSURL *storeURL = nil;
+    
+    if (kLOStorageCopyFromAppBundle) {
+        storeURL = [[self applicationDocumentsDirectory] URLByAppendingPathComponent:[kCoreDataIdentifier stringByAppendingPathExtension:@"sqlite"]];
+    
+        NSFileManager *fileManager = [NSFileManager defaultManager];
+        if (![fileManager fileExistsAtPath:[storeURL path]]) {
+            NSURL *defaultStoreURL = [[NSBundle mainBundle] URLForResource:kCoreDataIdentifier withExtension:@"sqlite"];
+            [fileManager copyItemAtURL:defaultStoreURL toURL:storeURL error:&error];
+            if (error) {
+                NSLog(@"Error: %@", error.description);
+                return nil;
+            }
         }
     }
-
+    else {
+        storeURL = [[NSBundle mainBundle] URLForResource:kCoreDataIdentifier withExtension:@"sqlite"];
+    }
+    
     _persistentStoreCoordinator = [[NSPersistentStoreCoordinator alloc] initWithManagedObjectModel:self.managedObjectModel];
 
     NSDictionary *options = @{
         NSMigratePersistentStoresAutomaticallyOption: @YES,
         NSInferMappingModelAutomaticallyOption: @YES
     };
-
-    NSError *error = nil;
 
     if (![_persistentStoreCoordinator addPersistentStoreWithType:NSSQLiteStoreType configuration:nil URL:storeURL options:options error:&error]) {
         NSLog(@"Unresolved error %@, %@", error, [error userInfo]);

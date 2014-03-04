@@ -9,6 +9,21 @@
 #import "LODomainObject.h"
 
 
+#pragma mark - Constant Definitions
+
+#ifndef kCoreDataIdentifier
+// Define your preference in your config.h or similar file
+#define kCoreDataIdentifier @"CoreData"
+#endif
+
+
+#ifndef kLOStorageCopyFromAppBundle
+// Define your preference in your config.h or similar file
+#define kLOStorageCopyFromAppBundle 0
+#endif
+
+
+
 /*!
  @brief 
     Permite trabajar con objetos CoreData temporales de manera más flexible. Es una clase Singleton
