@@ -125,7 +125,7 @@ static LOStorageService *_sharedInstance = nil;
     else {
         storeURL = [[NSBundle mainBundle] URLForResource:kCoreDataIdentifier withExtension:@"sqlite"];
     }
-    
+
     _persistentStoreCoordinator = [[NSPersistentStoreCoordinator alloc] initWithManagedObjectModel:self.managedObjectModel];
 
     NSDictionary *options = @{
@@ -142,7 +142,9 @@ static LOStorageService *_sharedInstance = nil;
 }
 
 
+
 #pragma mark - Data Methods
+
 
 - (void)deleteObject:(LODomainObject *)object
 {
